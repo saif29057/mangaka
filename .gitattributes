@@ -1,0 +1,4 @@
+# Fins de ligne LF partout (images Docker Linux, CI Ubuntu)
+* text=auto eol=lf
+*.jpg binary
+*.png binary
