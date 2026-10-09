@@ -6,12 +6,19 @@ import ExampleGallery from "./components/ExampleGallery.jsx";
 import LatencyBadge from "./components/LatencyBadge.jsx";
 import StyleSelector from "./components/StyleSelector.jsx";
 import Webcam from "./components/Webcam.jsx";
-import { getHealth, getMetadata, predict, predictVisualize } from "./services/api.js";
+import {
+  API_DOWN_MESSAGE,
+  getHealth,
+  getMetadata,
+  predict,
+  predictVisualize,
+} from "./services/api.js";
 
 const FALLBACK_STYLES = [
   { name: "hayao", label: "Hayao", description: "Style Miyazaki", engine: "dummy" },
   { name: "shinkai", label: "Shinkai", description: "Style Makoto Shinkai", engine: "dummy" },
 ];
+const HEALTH_POLL_MS = 5000;
 const TABS = [
   ["upload", "Fichier"],
   ["examples", "Exemples"],
@@ -30,13 +37,27 @@ export default function App() {
   const styleRef = useRef(style);
   const requestRef = useRef(0);
 
+  // Vérifie l'état de l'API au chargement puis toutes les 5 s : le bandeau passe au
+  // rouge si le backend s'arrête, et les styles (ONNX / factice) sont rechargés au retour.
   useEffect(() => {
-    getHealth()
-      .then(setHealth)
-      .catch(() => setHealth({ status: "down" }));
-    getMetadata()
-      .then((metadata) => setStyles(metadata.styles))
-      .catch(() => {});
+    let cancelled = false;
+    const refresh = () => {
+      getHealth()
+        .then((body) => {
+          if (cancelled) return;
+          setHealth(body);
+          // L'API est revenue : on efface l'ancien message « API ne répond pas ».
+          setError((previous) => (previous === API_DOWN_MESSAGE ? "" : previous));
+          return getMetadata().then((metadata) => !cancelled && setStyles(metadata.styles));
+        })
+        .catch(() => !cancelled && setHealth({ status: "down" }));
+    };
+    refresh();
+    const timer = setInterval(refresh, HEALTH_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, []);
 
   const run = useCallback(async (blob, styleName) => {
@@ -106,6 +127,14 @@ export default function App() {
         </p>
       </header>
 
+      {health && !online && (
+        <p className="mb-6 rounded-xl bg-red-100 p-3 text-sm text-red-700" role="alert">
+          {health.status === "down"
+            ? API_DOWN_MESSAGE
+            : "L'API est démarrée mais le modèle n'est pas encore chargé (erreur 503)."}
+        </p>
+      )}
+
       <main className="grid gap-8 lg:grid-cols-2">
         <section className="space-y-6">
           <div>
@@ -137,7 +166,10 @@ export default function App() {
 
         <section className="space-y-4">
           <h2 className="text-sm font-bold uppercase tracking-wide text-ink/50">3. Résultat</h2>
-          {error && <p className="rounded-xl bg-red-100 p-3 text-sm text-red-700">{error}</p>}
+          {/* Si l'API est coupée, le bandeau du haut l'indique déjà : pas de doublon. */}
+          {error && !(error === API_DOWN_MESSAGE && !online) && (
+            <p className="rounded-xl bg-red-100 p-3 text-sm text-red-700">{error}</p>
+          )}
           {source ? (
             <>
               <BeforeAfterSlider
