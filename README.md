@@ -96,9 +96,19 @@ dvc.yaml             pipeline prepare -> train -> evaluate
 
 - [ ] Membre A : baseline CycleGAN, fine-tuning depuis des poids pré-entraînés, style Shinkai,
       enregistrement dans le MLflow Model Registry (Staging / Production)
-- [ ] Membre B : remplacer les images de `frontend/public/examples` par de vraies photos
-      libres de droits
 - [ ] Rapport LaTeX (`rapport_technique.pdf`)
+
+## Crédits des photos d'exemple
+
+Les 4 photos de `frontend/public/examples` viennent de Wikimedia Commons, sous licence
+**CC0** (domaine public), redimensionnées à 800 px de large.
+
+| Fichier         | Sujet                       | Auteur           | Source |
+|-----------------|-----------------------------|------------------|--------|
+| `exemple-1.jpg` | Lac et montagnes            | Bonnie Moreland  | [Lake Mountain Landscape.jpg](https://commons.wikimedia.org/wiki/File:Lake_Mountain_Landscape.jpg) |
+| `exemple-2.jpg` | Rue d'Amsterdam la nuit     | Fons Heijnsbroek | [Koningsstraat / Nieuwmarkt, Amsterdam](https://commons.wikimedia.org/wiki/File:2024_-_Photo_of_the_street_Koningsstraat_and_square_Nieuwmarkt_with_Christmas_lights_by_night_in_Amsterdam_city_in_winter_-_free_image_of_street_photography_in_The_Netherlands_by_Fons_Heijnsbroek.jpg) |
+| `exemple-3.jpg` | Portrait de chat            | Anton Petrov     | [Cat portrait (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Cat_portrait_(Unsplash).jpg) |
+| `exemple-4.jpg` | Maison traditionnelle       | Ted Moravec      | [A traditional house - Flickr - Ted Moravec.jpg](https://commons.wikimedia.org/wiki/File:A_traditional_house_-_Flickr_-_Ted_Moravec.jpg) |
 
 ## Équipe
 
