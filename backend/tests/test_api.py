@@ -159,3 +159,12 @@ def test_onnx_model_is_used_when_present(tmp_path):
     output, latency_ms = engine.stylize(image, Style.hayao)
     assert output.getpixel((0, 0)) == (0, 255, 255)
     assert latency_ms >= 0
+
+
+def test_corrupted_onnx_leaves_engine_not_ready(tmp_path):
+    """Un .onnx illisible ne fait pas planter le démarrage : le moteur reste non prêt (-> 503)."""
+    (tmp_path / "hayao.onnx").write_bytes(b"pas un modele onnx")
+    engine = StyleTransferEngine(models_dir=tmp_path)
+    engine.load()
+    assert engine.ready is False
+    assert engine.sessions == {}

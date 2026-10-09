@@ -13,6 +13,7 @@ Tant qu'un fichier .onnx est absent, le style utilise un modèle factice
 from __future__ import annotations
 
 import io
+import logging
 import os
 import time
 from pathlib import Path
@@ -21,6 +22,8 @@ import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps, UnidentifiedImageError
 
 from .schemas import Style
+
+logger = logging.getLogger("uvicorn.error")
 
 MODELS_DIR = Path(os.getenv("MODELS_DIR", "models"))
 MODEL_VERSION = os.getenv("MODEL_VERSION", "0.1.0")
@@ -109,8 +112,14 @@ class StyleTransferEngine:
             return False
 
     def load(self) -> None:
-        """Charge les .onnx présents ; les styles sans fichier restent factices."""
+        """Charge les .onnx présents ; les styles sans fichier restent factices.
+
+        Si un .onnx existe mais est illisible (fichier corrompu, mauvais export),
+        le serveur démarre quand même mais reste « non prêt » : les routes
+        d'inférence répondent 503 au lieu de faire planter l'API au démarrage.
+        """
         self.sessions = {}
+        self.ready = False
         for style in Style:
             path = self.models_dir / f"{style.value}.onnx"
             if not path.is_file():
@@ -120,7 +129,12 @@ class StyleTransferEngine:
             providers = ["CPUExecutionProvider"]
             if self.gpu_available():
                 providers.insert(0, "CUDAExecutionProvider")
-            self.sessions[style] = ort.InferenceSession(str(path), providers=providers)
+            try:
+                self.sessions[style] = ort.InferenceSession(str(path), providers=providers)
+            except Exception as exc:  # onnxruntime lève plusieurs types d'erreurs
+                logger.error("Impossible de charger %s : %s", path, exc)
+                self.sessions = {}
+                return
         self.ready = True
 
     def engine_for(self, style: Style) -> str:
