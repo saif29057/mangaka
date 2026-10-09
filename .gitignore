@@ -1,0 +1,26 @@
+# Données et poids : versionnés par DVC, jamais par Git
+/data/raw/
+/data/processed/
+/models/*
+!/models/.gitkeep
+/checkpoints/
+*.pt
+*.pth
+*.onnx
+
+# MLflow
+mlruns/
+mlflow.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+
+.env
+.DS_Store

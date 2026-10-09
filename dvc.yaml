@@ -1,0 +1,29 @@
+# Pipeline reproductible : dvc repro
+stages:
+  prepare_hayao:
+    cmd: python -m src.data.dataset --style Hayao
+    deps:
+      - src/data/dataset.py
+      - data/raw/Hayao/style
+    outs:
+      - data/processed/Hayao/smooth
+  train_hayao:
+    cmd: python -m src.models.train --style Hayao
+    deps:
+      - src/models/train.py
+      - src/models/architecture.py
+      - data/raw/train_photo
+      - data/processed/Hayao/smooth
+    outs:
+      - checkpoints/hayao/generator.pt
+  evaluate_hayao:
+    cmd: python -m src.models.evaluate --style Hayao --checkpoint checkpoints/hayao/generator.pt
+    deps:
+      - src/models/evaluate.py
+      - checkpoints/hayao/generator.pt
+      - data/raw/test_photo
+    outs:
+      - models/hayao.onnx
+    metrics:
+      - models/metrics.json:
+          cache: false

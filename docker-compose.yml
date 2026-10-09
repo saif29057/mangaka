@@ -1,0 +1,35 @@
+# Lancement complet : docker compose up --build
+#   Frontend : http://localhost:3000      API : http://localhost:8000/docs
+#   MLflow   : http://localhost:5000
+services:
+  backend:
+    build: ./backend
+    environment:
+      MODELS_DIR: /models
+      MODEL_VERSION: ${MODEL_VERSION:-0.1.0}
+    volumes:
+      - ./models:/models:ro
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts
+    volumes:
+      - mlflow-data:/mlflow
+    ports:
+      - "5000:5000"
+
+volumes:
+  mlflow-data:

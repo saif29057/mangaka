@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #1b1630;
+  --color-paper: #fbf7f1;
+  --color-sakura: #ff6f91;
+  --color-sky: #4f8cff;
+  --font-display: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+}
