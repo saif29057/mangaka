@@ -68,7 +68,8 @@ def to_tensor(image: Image.Image) -> np.ndarray:
 
 def to_image(tensor: np.ndarray) -> Image.Image:
     array = (tensor[0].transpose(1, 2, 0) + 1.0) * 127.5
-    return Image.fromarray(np.clip(array, 0, 255).astype(np.uint8))
+    # Arrondi au plus proche : astype seul tronque (254.99997 -> 254) et décale les couleurs.
+    return Image.fromarray(np.clip(np.rint(array), 0, 255).astype(np.uint8))
 
 
 def dummy_stylize(image: Image.Image, style: Style) -> Image.Image:
