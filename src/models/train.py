@@ -9,10 +9,14 @@ Déroulement :
      (perte de contenu), ce qui évite un départ instable du jeu adverse.
   2. Phase adverse : pertes adverse (LSGAN), contenu, style (matrices de Gram), couleur.
 
-TODO Membre A :
-  - baseline CycleGAN (ResnetGenerator x2 + PatchDiscriminator x2, perte de cycle) ;
-  - reprise depuis des poids pré-entraînés (--resume) pour le fine-tuning ;
-  - ajuster les poids des pertes par style (les valeurs par défaut sont un point de départ).
+Fine-tuning (--resume) : on repart des poids d'un générateur déjà entraîné, par exemple
+Hayao -> Shinkai, ce qui demande beaucoup moins d'époques qu'un départ de zéro :
+    python -m src.models.train --style Shinkai --resume checkpoints/hayao/generator.pt \
+        --init-epochs 0 --epochs 10
+La phase d'initialisation est alors inutile : le générateur sait déjà reconstruire une photo.
+
+La baseline CycleGAN est dans src/models/train_cyclegan.py.
+Les poids des pertes (--w-*) sont des valeurs de départ, à régler par style.
 """
 
 from __future__ import annotations
@@ -93,6 +97,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-steps", type=int, default=0, help="Limite par époque (debug)")
     parser.add_argument("--no-pretrained-vgg", action="store_true", help="Tests hors ligne")
     parser.add_argument("--experiment", default="anime-style-transfer")
+    parser.add_argument(
+        "--resume", default="", help="Poids d'un générateur déjà entraîné (fine-tuning)"
+    )
     return parser.parse_args()
 
 
@@ -111,6 +118,10 @@ def main() -> None:
     )
 
     generator = AnimeGenerator().to(device)
+    if args.resume:
+        # strict=True : l'architecture doit être exactement la même que celle du checkpoint.
+        generator.load_state_dict(torch.load(args.resume, map_location=device))
+        print(f"Poids chargés depuis {args.resume}")
     discriminator = PatchDiscriminator().to(device)
     vgg = VGGFeatures(pretrained=not args.no_pretrained_vgg).to(device)
     opt_g = torch.optim.Adam(generator.parameters(), lr=args.lr_g, betas=(0.5, 0.999))
@@ -165,7 +176,7 @@ def main() -> None:
 
                 values = (g_loss, g_adv, content, gram_loss, d_loss)
                 for key, value in zip(sums, values):
-                    sums[key] += float(value)
+                    sums[key] += value.item()
                 batches += 1
                 step += 1
                 if args.max_steps and batches >= args.max_steps:
