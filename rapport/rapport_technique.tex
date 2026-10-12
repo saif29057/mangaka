@@ -1,0 +1,207 @@
+% Rapport technique - Mangaka : transfert de style photo -> anime
+% Compilation : pdflatex rapport_technique.tex (deux fois pour la table des matières)
+% Convention : tout ce qui est marqué \AMESURER ou \AFAIRE est à compléter.
+% Aucun chiffre ne doit être écrit sans avoir été mesuré (MLflow, models/metrics.json).
+
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+
+% Emplacements à remplir : bien visibles en rouge dans le PDF
+\newcommand{\AMESURER}{\textcolor{red}{\textbf{[à mesurer]}}}
+\newcommand{\AFAIRE}[1]{\textcolor{red}{\textbf{[À FAIRE : #1]}}}
+\newcommand{\FIGURE}[1]{\fbox{\parbox{0.9\linewidth}{\centering\vspace{2cm}
+  \textcolor{red}{\textbf{Figure à insérer : #1}}\vspace{2cm}}}}
+
+\title{Mangaka : transfert de style photo vers anime\\
+  \large Projet de module Deep Learning Avancé -- Axe 2 (IA générative)}
+\author{\AFAIRE{Nom 1} \and \AFAIRE{Nom 2}}
+\date{\AFAIRE{date de la soutenance}}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% ---------------------------------------------------------------------------
+\section{Problématique}
+
+Transformer une photo réelle en image au style d'un réalisateur d'animation (Hayao Miyazaki,
+Makoto Shinkai) en conservant son contenu. Il n'existe pas de paires photo/dessin : le
+problème est une traduction d'image à image \emph{non appariée}.
+
+Deux exigences contradictoires, mesurées séparément :
+\begin{itemize}
+  \item proximité au style visé : \textbf{FID} entre images générées et vraies images d'anime ;
+  \item préservation du contenu : \textbf{LPIPS} entre la photo et sa version stylisée.
+\end{itemize}
+
+Cas d'usage : application web où l'utilisateur envoie une photo (fichier, galerie, webcam),
+choisit un style et reçoit le résultat avec la latence d'inférence.
+
+% ---------------------------------------------------------------------------
+\section{Données et prétraitement}
+
+\subsection{Jeu de données}
+Dataset public d'AnimeGAN (Chen et al., 2019) : photos réelles d'entraînement
+(\texttt{train\_photo}), photos de test (\texttt{test\_photo}) et images extraites de films
+(\texttt{Hayao/style}, \texttt{Shinkai/style}).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lr}
+\toprule
+Sous-ensemble & Nombre d'images \\
+\midrule
+Photos d'entraînement & \AMESURER \\
+Photos de test & \AMESURER \\
+Style Hayao & \AMESURER \\
+Style Shinkai & \AMESURER \\
+\bottomrule
+\end{tabular}
+\caption{Taille du jeu de données (versionné par DVC, \texttt{data/raw.dvc}).}
+\end{table}
+
+\subsection{Prétraitement}
+\begin{itemize}
+  \item Redimensionnement (256$\times$256 pour AnimeGAN, 128$\times$128 pour CycleGAN) et
+        normalisation dans $[-1,1]$, même convention que l'API (\texttt{src/data/dataset.py}).
+  \item Lissage des contours des images d'anime (Canny + dilatation + flou gaussien) : le
+        discriminateur apprend qu'un trait flou est « faux », ce qui force des contours nets.
+  \item Augmentation : miroir horizontal des photos, à l'entraînement uniquement.
+\end{itemize}
+
+\subsection{Absence de fuite de données}
+Les photos de test ne servent qu'à \texttt{evaluate.py}. \AFAIRE{résultat du contrôle de
+doublons entre \texttt{train\_photo} et \texttt{test\_photo} (empreintes des fichiers)}.
+Aucune statistique n'est calculée sur l'ensemble de test avant l'évaluation.
+
+% ---------------------------------------------------------------------------
+\section{Architectures}
+
+\subsection{Baseline : CycleGAN (128$\times$128)}
+Deux générateurs ResNet (6 blocs résiduels, normalisation d'instance) et deux discriminateurs
+PatchGAN. Pertes : adverse LSGAN, cycle ($\lambda=10$), identité ($\lambda=5$), historique de
+50 images générées pour le discriminateur (\texttt{src/models/train\_cyclegan.py}).
+\[
+\mathcal{L}_G = \mathcal{L}_{adv} + \lambda_{cyc}\,\lVert G_{ap}(G_{pa}(x)) - x\rVert_1
+  + \lambda_{id}\,\lVert G_{pa}(y) - y\rVert_1 + \dots
+\]
+
+\subsection{Modèle avancé : AnimeGAN (256$\times$256)}
+Générateur léger de type AnimeGANv2 (blocs résiduels inversés, convolutions en profondeur),
+un générateur par style. Discriminateur PatchGAN avec \textbf{normalisation spectrale}.
+Pertes : adverse, contenu (VGG19), style (matrices de Gram sur images en gris), couleur (YUV).
+Phase d'initialisation (reconstruction seule) avant le jeu adverse
+(\texttt{src/models/train.py}). Le style Shinkai est affiné depuis les poids Hayao
+(\texttt{--resume}).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+ & CycleGAN & AnimeGAN \\
+\midrule
+Paramètres du générateur & \AMESURER & \AMESURER \\
+Taille du fichier ONNX & \AMESURER & \AMESURER \\
+\bottomrule
+\end{tabular}
+\caption{Taille des modèles.}
+\end{table}
+
+% ---------------------------------------------------------------------------
+\section{Protocole expérimental}
+\begin{itemize}
+  \item Matériel : \AFAIRE{GPU Kaggle utilisé}, durée d'entraînement \AMESURER.
+  \item Hyperparamètres : voir les paramètres journalisés dans MLflow (époques, lr, poids des
+        pertes) \AFAIRE{tableau des valeurs retenues}.
+  \item Évaluation sur \texttt{test\_photo} uniquement : FID (Inception v3, 2048
+        caractéristiques) contre les images du style, LPIPS (AlexNet) contre la photo d'entrée.
+  \item Export ONNX (opset 17, hauteur et largeur dynamiques) et vérification de l'écart
+        PyTorch / ONNX Runtime sur la même image.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{Résultats : baseline contre modèle avancé}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Modèle & Résolution & FID $\downarrow$ & LPIPS $\downarrow$ & Latence ONNX CPU (ms) \\
+\midrule
+CycleGAN (Hayao) & 128 & \AMESURER & \AMESURER & \AMESURER \\
+AnimeGAN (Hayao) & 256 & \AMESURER & \AMESURER & \AMESURER \\
+AnimeGAN (Shinkai) & 256 & \AMESURER & \AMESURER & \AMESURER \\
+\bottomrule
+\end{tabular}
+\caption{Comparaison sur les photos de test (source : \texttt{models/metrics.json}).}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+ & PyTorch CPU & ONNX Runtime CPU \\
+\midrule
+Latence moyenne (ms) & \AMESURER & \AMESURER \\
+Écart maximal des sorties & \multicolumn{2}{c}{\AMESURER} \\
+\bottomrule
+\end{tabular}
+\caption{Gain de l'export ONNX.}
+\end{table}
+
+\FIGURE{courbes de pertes générateur / discriminateur (captures MLflow)}
+
+\FIGURE{grille photo / CycleGAN / AnimeGAN Hayao / AnimeGAN Shinkai sur 4 photos de test}
+
+% ---------------------------------------------------------------------------
+\section{Analyse critique}
+\AFAIRE{à rédiger à partir des résultats mesurés}
+\begin{itemize}
+  \item Compromis FID / LPIPS : un style plus marqué éloigne du contenu.
+  \item Effet de la résolution (128 contre 256) sur la comparaison.
+  \item Artefacts observés (couleurs, contours, textures) et leur cause probable.
+  \item Effet de la normalisation spectrale sur la stabilité de l'entraînement.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{MLOps}
+\begin{itemize}
+  \item \textbf{DVC} : \texttt{data/raw} versionné (\texttt{data/raw.dvc}), remote
+        \AFAIRE{type de remote} ; pipeline \texttt{dvc.yaml} prepare $\rightarrow$ train
+        $\rightarrow$ evaluate.
+  \item \textbf{MLflow} : paramètres, pertes par époque, grilles d'images par époque,
+        checkpoints ; Model Registry avec statut Staging puis Production
+        (\texttt{src/models/registry.py}).
+  \item \textbf{API} : FastAPI asynchrone, schémas Pydantic, codes 400 / 422 / 503, ONNX
+        Runtime, modèle factice tant qu'aucun \texttt{.onnx} n'est présent.
+  \item \textbf{Frontend} : React + Tailwind, glisser-déposer, galerie, webcam (capture et
+        continu), curseur avant/après, latences client et serveur.
+  \item \textbf{Docker} : Dockerfiles multi-stage, \texttt{docker compose up --build}
+        (frontend, backend, MLflow).
+  \item \textbf{CI} : GitHub Actions (flake8, black, pytest, eslint, build Vite, build des
+        images Docker et test de \texttt{/health}).
+\end{itemize}
+
+\FIGURE{capture de l'interface MLflow (runs et Model Registry)}
+
+% ---------------------------------------------------------------------------
+\section{Limites et perspectives}
+\begin{itemize}
+  \item Pas d'espace latent pour un générateur feed-forward : \AFAIRE{décision prise sur les
+        curseurs d'interpolation demandés par le sujet}.
+  \item Budget GPU limité (Kaggle) : nombre d'époques réduit, poids des pertes peu réglés.
+  \item FID calculé sur un petit nombre d'images de test : estimation bruitée.
+  \item Inférence sur CPU dans Docker ; quantification INT8 non explorée.
+\end{itemize}
+
+\end{document}
