@@ -114,7 +114,7 @@ export default function App() {
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black tracking-tight">
-            Anime Style <span className="text-sakura">Studio</span>
+            Manga<span className="text-sakura">ka</span>
           </h1>
           <p className="mt-1 text-ink/60">Transforme une photo en image de style anime.</p>
         </div>

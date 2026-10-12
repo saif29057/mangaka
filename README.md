@@ -1,4 +1,6 @@
-# Anime Style Studio
+# Mangaka
+
+> Mangaka : transfert de style photo → anime (Hayao, Shinkai) avec CycleGAN et AnimeGAN, PyTorch, ONNX, FastAPI, React, DVC, MLflow, Docker.
 
 Projet du module Deep Learning Avancé, **axe 2 (IA générative)** : transformer une photo
 en image de style anime, avec un style au choix (Hayao, Shinkai).
