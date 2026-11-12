@@ -21,7 +21,9 @@ services:
       - "3000:80"
 
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.16.2
+    # Même version majeure que le client (requirements-train.txt) : un client MLflow 3
+    # ne peut pas enregistrer de modèle sur un serveur MLflow 2 (API logged-models absente).
+    image: ghcr.io/mlflow/mlflow:v3.17.0
     command: >
       mlflow server --host 0.0.0.0 --port 5000
       --backend-store-uri sqlite:////mlflow/mlflow.db
