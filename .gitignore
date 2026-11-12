@@ -27,3 +27,4 @@ dist/
 
 # Outils locaux
 .claude/
+/data/_download/
