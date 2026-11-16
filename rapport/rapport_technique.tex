@@ -162,8 +162,8 @@ Poids des pertes & cycle 10, identité 5 & adv. 1, contenu 1,5, Gram 3, couleur 
 Modèle & Résolution & FID $\downarrow$ & LPIPS $\downarrow$ & Latence ONNX CPU (ms) \\
 \midrule
 CycleGAN (Hayao) & 128 & 144,1 & 0,128 & 168,7 \\
-AnimeGAN (Hayao) & 256 & \AMESURER & \AMESURER & \AMESURER \\
-AnimeGAN (Shinkai) & 256 & \AMESURER & \AMESURER & \AMESURER \\
+AnimeGAN (Hayao) & 256 & 180,1 & 0,041 & 244,4 \\
+AnimeGAN (Shinkai) & 256 & 136,8 & 0,029 & 244,3 \\
 \bottomrule
 \end{tabular}
 \caption{Comparaison sur les photos de test (source : \texttt{models/metrics.json}).}
@@ -175,12 +175,22 @@ AnimeGAN (Shinkai) & 256 & \AMESURER & \AMESURER & \AMESURER \\
 \toprule
  & PyTorch CPU & ONNX Runtime CPU \\
 \midrule
-Latence moyenne (ms) & \AMESURER & \AMESURER \\
-Écart maximal des sorties & \multicolumn{2}{c}{\AMESURER} \\
+Latence moyenne, AnimeGAN Hayao (ms) & 150,2 & 244,4 \\
+Latence moyenne, AnimeGAN Shinkai (ms) & 155,4 & 244,3 \\
+Latence moyenne, CycleGAN (ms) & 108,0 & 168,7 \\
+Écart maximal des sorties (AnimeGAN) & \multicolumn{2}{c}{$2{,}3\cdot10^{-5}$} \\
+Écart maximal des sorties (CycleGAN) & \multicolumn{2}{c}{$1{,}2\cdot10^{-6}$} \\
 \bottomrule
 \end{tabular}
-\caption{Gain de l'export ONNX.}
+\caption{PyTorch contre ONNX Runtime sur le CPU de la session Kaggle.}
 \end{table}
+
+L'export ONNX est \textbf{fidèle} (écart maximal de l'ordre de $10^{-5}$ sur des sorties dans
+$[-1, 1]$), mais il n'est \textbf{pas plus rapide} dans ces mesures : ONNX Runtime est environ
+1,6 fois plus lent que PyTorch sur le CPU de Kaggle. L'intérêt de l'export reste le
+déploiement (pas de dépendance à PyTorch dans l'image Docker du backend, image plus légère) ;
+le gain de vitesse attendu demanderait de régler ONNX Runtime (nombre de threads, niveau
+d'optimisation du graphe) ou de quantifier le modèle en INT8.
 
 \FIGURE{courbes de pertes générateur / discriminateur (captures MLflow)}
 
@@ -188,12 +198,31 @@ Latence moyenne (ms) & \AMESURER & \AMESURER \\
 
 % ---------------------------------------------------------------------------
 \section{Analyse critique}
-\AFAIRE{à rédiger à partir des résultats mesurés}
 \begin{itemize}
-  \item Compromis FID / LPIPS : un style plus marqué éloigne du contenu.
-  \item Effet de la résolution (128 contre 256) sur la comparaison.
-  \item Artefacts observés (couleurs, contours, textures) et leur cause probable.
-  \item Effet de la normalisation spectrale sur la stabilité de l'entraînement.
+  \item \textbf{Compromis FID / LPIPS.} AnimeGAN préserve beaucoup mieux le contenu de la photo
+        que CycleGAN (LPIPS 0,041 et 0,029 contre 0,128), grâce à la perte de contenu VGG et à
+        la perte de couleur. En contrepartie, sur Hayao, sa sortie est plus éloignée des images
+        du style (FID 180,1 contre 144,1) : le générateur reste proche de la photo et applique
+        un style moins marqué. CycleGAN, sans perte de contenu explicite, s'autorise des
+        transformations plus fortes, ce qui rapproche ses statistiques de celles du style mais
+        abîme davantage le contenu.
+  \item \textbf{Shinkai meilleur que Hayao.} Avec seulement 10 époques, mais en partant des
+        poids Hayao, le générateur Shinkai obtient le meilleur FID (136,8) et le meilleur
+        LPIPS (0,029). Le style Shinkai (ciels, lumière, couleurs saturées) est plus proche des
+        photos réelles que le trait de Hayao, donc plus facile à atteindre sans déformer le
+        contenu. L'affinage depuis Hayao a aussi évité la phase d'initialisation.
+  \item \textbf{Résolution.} La comparaison n'est pas à armes égales : CycleGAN est évalué en
+        128$\times$128 et AnimeGAN en 256$\times$256. Le FID étant calculé après
+        redimensionnement pour Inception, la plus basse résolution de CycleGAN lisse les
+        textures et peut l'avantager.
+  \item \textbf{Stabilité.} Les pertes du discriminateur de CycleGAN restent stables autour de
+        0,31 sur les 20 époques et la perte du générateur décroît régulièrement (6,98 à
+        environ 3,4). Pour AnimeGAN, la reprise avec un discriminateur réinitialisé se voit :
+        la perte du générateur remonte au début du second run (environ 3,3) puis redescend
+        lentement. La normalisation spectrale a empêché toute divergence malgré cette reprise.
+  \item \textbf{Budget.} Les entraînements sont courts (20 époques pour Hayao, 10 pour
+        Shinkai contre 100 et plus dans l'article AnimeGAN) : les scores mesurent un modèle
+        encore en progression, en particulier pour Hayao.
 \end{itemize}
 
 % ---------------------------------------------------------------------------
