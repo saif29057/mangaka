@@ -3,7 +3,10 @@
 /data/processed/
 /models/*
 !/models/.gitkeep
-/checkpoints/
+!/models/*.dvc
+!/models/metrics.json
+/checkpoints/*
+!/checkpoints/*.dvc
 *.pt
 *.pth
 *.onnx

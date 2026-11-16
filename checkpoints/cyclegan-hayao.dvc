@@ -1,0 +1,6 @@
+outs:
+- md5: 5bc080000688b04077d291247b1745f0.dir
+  size: 31364747
+  nfiles: 1
+  hash: md5
+  path: cyclegan-hayao

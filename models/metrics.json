@@ -1,0 +1,19 @@
+{
+  "fid_cyclegan_hayao": 144.13438415527344,
+  "lpips_cyclegan_hayao": 0.1278112530708313,
+  "onnx_max_abs_diff_cyclegan_hayao": 1.1902302503585815e-06,
+  "latency_torch_cpu_ms_cyclegan_hayao": 107.96407230009208,
+  "latency_onnx_cpu_ms_cyclegan_hayao": 168.65999500005273,
+  "fid_animegan_hayao": 180.0811309814453,
+  "lpips_animegan_hayao": 0.04068797826766968,
+  "onnx_max_abs_diff_animegan_hayao": 1.9848346710205078e-05,
+  "latency_torch_cpu_ms_animegan_hayao": 150.24170679989766,
+  "latency_onnx_cpu_ms_animegan_hayao": 244.36145150011725,
+  "fid": 136.83677673339844,
+  "lpips": 0.029131382703781128,
+  "fid_animegan_shinkai": 136.83677673339844,
+  "lpips_animegan_shinkai": 0.029131382703781128,
+  "onnx_max_abs_diff_animegan_shinkai": 2.3305416107177734e-05,
+  "latency_torch_cpu_ms_animegan_shinkai": 155.41483429988148,
+  "latency_onnx_cpu_ms_animegan_shinkai": 244.3391470998904
+}

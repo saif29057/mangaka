@@ -1,0 +1,5 @@
+outs:
+- md5: cc8bca355500011c046a683559d729bc
+  size: 4046972
+  hash: md5
+  path: shinkai.onnx

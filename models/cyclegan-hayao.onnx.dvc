@@ -1,0 +1,5 @@
+outs:
+- md5: 9374eb0f2f87e102203c5967e139da2e
+  size: 31430196
+  hash: md5
+  path: cyclegan-hayao.onnx

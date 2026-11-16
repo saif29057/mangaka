@@ -1,0 +1,72 @@
+schema: '2.0'
+stages:
+  prepare_hayao:
+    cmd: python -m src.data.dataset --style Hayao
+    deps:
+    - path: data/raw/Hayao/style
+      hash: md5
+      md5: 06b13cc3e45a35d07f376aaa7b0eaee6.dir
+      size: 48173873
+      nfiles: 1792
+    - path: src/data/dataset.py
+      hash: md5
+      md5: e22bafbf8fd48e097ce8dba191a3f727
+      size: 4802
+    outs:
+    - path: data/processed/Hayao/smooth
+      hash: md5
+      md5: 3fd36ab4ce96765aba0e0a558c6ae361.dir
+      size: 36398243
+      nfiles: 1792
+  train_hayao:
+    cmd: python -m src.models.train --style Hayao
+    deps:
+    - path: data/processed/Hayao/smooth
+      hash: md5
+      md5: 3fd36ab4ce96765aba0e0a558c6ae361.dir
+      size: 36398243
+      nfiles: 1792
+    - path: data/raw/train_photo
+      hash: md5
+      md5: fcc653d1e3bb61f5493204d7de5b5d16.dir
+      size: 258842986
+      nfiles: 6656
+    - path: src/models/architecture.py
+      hash: md5
+      md5: 3631f66e8f2700b6a769a410bb29fa79
+      size: 5569
+    - path: src/models/train.py
+      hash: md5
+      md5: 93cb4baeb5428bd6d27c36dd6a608f75
+      size: 8702
+    outs:
+    - path: checkpoints/hayao/generator.pt
+      hash: md5
+      md5: 8b4215fc3c39ea984a37c5d8301c47cf
+      size: 3932363
+  evaluate_hayao:
+    cmd: python -m src.models.evaluate --style Hayao --checkpoint 
+      checkpoints/hayao/generator.pt
+    deps:
+    - path: checkpoints/hayao/generator.pt
+      hash: md5
+      md5: 8b4215fc3c39ea984a37c5d8301c47cf
+      size: 3932363
+    - path: data/raw/test_photo
+      hash: md5
+      md5: 0a2e9798330c3b74fc7d8cd372ce6013.dir
+      size: 45920800
+      nfiles: 791
+    - path: src/models/evaluate.py
+      hash: md5
+      md5: ca332d42e3c729927044ae1c2d51774d
+      size: 8083
+    outs:
+    - path: models/hayao.onnx
+      hash: md5
+      md5: 6c464a572d45324ea1d2e25c13af7879
+      size: 4046972
+    - path: models/metrics.json
+      hash: md5
+      md5: 4ab84f0c4f04474fdbc4d884eb6bb34f
+      size: 894

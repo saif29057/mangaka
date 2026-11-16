@@ -192,9 +192,18 @@ déploiement (pas de dépendance à PyTorch dans l'image Docker du backend, imag
 le gain de vitesse attendu demanderait de régler ONNX Runtime (nombre de threads, niveau
 d'optimisation du graphe) ou de quantifier le modèle en INT8.
 
-\FIGURE{courbes de pertes générateur / discriminateur (captures MLflow)}
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{figures/courbes_pertes.png}
+\caption{Pertes moyennes par époque (base MLflow). Pour AnimeGAN Hayao, la ligne pointillée
+marque la reprise après la coupure à 12 h (discriminateur réinitialisé).}
+\end{figure}
 
-\FIGURE{grille photo / CycleGAN / AnimeGAN Hayao / AnimeGAN Shinkai sur 4 photos de test}
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{figures/grille_resultats.png}
+\caption{Quatre photos de test (jamais vues à l'entraînement) et leurs versions stylisées.}
+\end{figure}
 
 % ---------------------------------------------------------------------------
 \section{Analyse critique}
@@ -202,24 +211,32 @@ d'optimisation du graphe) ou de quantifier le modèle en INT8.
   \item \textbf{Compromis FID / LPIPS.} AnimeGAN préserve beaucoup mieux le contenu de la photo
         que CycleGAN (LPIPS 0,041 et 0,029 contre 0,128), grâce à la perte de contenu VGG et à
         la perte de couleur. En contrepartie, sur Hayao, sa sortie est plus éloignée des images
-        du style (FID 180,1 contre 144,1) : le générateur reste proche de la photo et applique
-        un style moins marqué. CycleGAN, sans perte de contenu explicite, s'autorise des
-        transformations plus fortes, ce qui rapproche ses statistiques de celles du style mais
-        abîme davantage le contenu.
+        du style (FID 180,1 contre 144,1). La grille de résultats le confirme visuellement :
+        après 20 et 10 époques, les sorties AnimeGAN restent \textbf{très proches de la photo}
+        (couleurs légèrement adoucies, contours un peu plus nets), le style anime est encore
+        peu visible. Un LPIPS très bas est donc ici le signe d'un style trop faible plutôt que
+        d'un modèle excellent. CycleGAN transforme davantage l'image (aplats, palette pastel),
+        mais au prix de flou et d'artefacts en damier dans les zones texturées (feuillages),
+        aggravés par sa résolution de 128.
   \item \textbf{Shinkai meilleur que Hayao.} Avec seulement 10 époques, mais en partant des
         poids Hayao, le générateur Shinkai obtient le meilleur FID (136,8) et le meilleur
-        LPIPS (0,029). Le style Shinkai (ciels, lumière, couleurs saturées) est plus proche des
-        photos réelles que le trait de Hayao, donc plus facile à atteindre sans déformer le
-        contenu. L'affinage depuis Hayao a aussi évité la phase d'initialisation.
+        LPIPS (0,029). Le style Shinkai (ciels, lumière, couleurs réalistes) est plus proche des
+        photos que le trait de Hayao, si bien qu'une sortie encore très photographique est déjà
+        assez proche de ses images : le FID favorise ici un modèle prudent. L'affinage depuis
+        Hayao a aussi évité la phase d'initialisation.
   \item \textbf{Résolution.} La comparaison n'est pas à armes égales : CycleGAN est évalué en
         128$\times$128 et AnimeGAN en 256$\times$256. Le FID étant calculé après
         redimensionnement pour Inception, la plus basse résolution de CycleGAN lisse les
         textures et peut l'avantager.
-  \item \textbf{Stabilité.} Les pertes du discriminateur de CycleGAN restent stables autour de
-        0,31 sur les 20 époques et la perte du générateur décroît régulièrement (6,98 à
-        environ 3,4). Pour AnimeGAN Hayao, la perte du générateur passe de 3,81 (époque 11, fin
-        du premier run) à 3,33 dès la reprise : le discriminateur réinitialisé est d'abord
-        plus facile à tromper. Elle se stabilise ensuite autour de 3,3. Aucune divergence n'a
+  \item \textbf{Stabilité.} La perte du discriminateur de CycleGAN reste stable autour de
+        0,31 sur les 20 époques et celle du générateur décroît régulièrement (de 6,98 à 2,8).
+        Pour AnimeGAN Hayao, le passage de la phase d'initialisation au jeu adverse (époque 3)
+        fait bondir la perte du générateur, qui redescend ensuite. À la reprise (époque 12),
+        le discriminateur réinitialisé voit sa perte remonter à 0,5 puis redescendre vers 0,2
+        ; la perte du générateur reste autour de 3,3. Pour Shinkai, la perte du discriminateur
+        baisse régulièrement (0,54 à 0,23) tandis que celle du générateur remonte légèrement :
+        le discriminateur gagne la partie, signe qu'il faudrait plus d'époques ou un poids
+        adverse plus fort pour que le générateur s'éloigne de la photo. Aucune divergence n'a
         été observée, ce qui est cohérent avec le rôle stabilisateur de la normalisation
         spectrale (non testée sans elle, faute de budget GPU).
   \item \textbf{Budget.} Les entraînements sont courts (20 époques pour Hayao, 10 pour
