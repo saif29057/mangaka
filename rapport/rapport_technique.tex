@@ -110,8 +110,8 @@ Phase d'initialisation (reconstruction seule) avant le jeu adverse
 \toprule
  & CycleGAN & AnimeGAN \\
 \midrule
-Paramètres du générateur & \AMESURER & \AMESURER \\
-Taille du fichier ONNX & \AMESURER & \AMESURER \\
+Paramètres du générateur & 7\,837\,699 & 973\,699 \\
+Taille du fichier ONNX & 30,0 Mo & 3,8 Mo \\
 \bottomrule
 \end{tabular}
 \caption{Taille des modèles.}
@@ -120,7 +120,7 @@ Taille du fichier ONNX & \AMESURER & \AMESURER \\
 % ---------------------------------------------------------------------------
 \section{Protocole expérimental}
 \begin{itemize}
-  \item Matériel : \AFAIRE{GPU Kaggle utilisé}, durée d'entraînement \AMESURER.
+  \item Matériel : GPU Kaggle 2 $	imes$ NVIDIA Tesla T4, durée d'entraînement \AMESURER.
   \item Hyperparamètres : voir les paramètres journalisés dans MLflow (époques, lr, poids des
         pertes) \AFAIRE{tableau des valeurs retenues}.
   \item Évaluation sur \texttt{test\_photo} uniquement : FID (Inception v3, 2048
@@ -138,7 +138,7 @@ Taille du fichier ONNX & \AMESURER & \AMESURER \\
 \toprule
 Modèle & Résolution & FID $\downarrow$ & LPIPS $\downarrow$ & Latence ONNX CPU (ms) \\
 \midrule
-CycleGAN (Hayao) & 128 & \AMESURER & \AMESURER & \AMESURER \\
+CycleGAN (Hayao) & 128 & 144,1 & 0,128 & 168,7 \\
 AnimeGAN (Hayao) & 256 & \AMESURER & \AMESURER & \AMESURER \\
 AnimeGAN (Shinkai) & 256 & \AMESURER & \AMESURER & \AMESURER \\
 \bottomrule
