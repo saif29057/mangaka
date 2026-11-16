@@ -80,8 +80,9 @@ Style Shinkai & 1\,650 \\
 \end{itemize}
 
 \subsection{Absence de fuite de données}
-Les photos de test ne servent qu'à \texttt{evaluate.py}. \AFAIRE{résultat du contrôle de
-doublons entre \texttt{train\_photo} et \texttt{test\_photo} (empreintes des fichiers)}.
+Les photos de test ne servent qu'à \texttt{evaluate.py}. Le script \texttt{src/data/prepare\_raw.py} compare l'empreinte MD5 de chaque photo de
+test à celles des 6\,656 photos d'entraînement : aucun doublon n'a été trouvé, les 791 photos
+de test sont donc toutes inédites pour le modèle.
 Aucune statistique n'est calculée sur l'ensemble de test avant l'évaluation.
 
 % ---------------------------------------------------------------------------
