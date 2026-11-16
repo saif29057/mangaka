@@ -217,9 +217,11 @@ d'optimisation du graphe) ou de quantifier le modèle en INT8.
         textures et peut l'avantager.
   \item \textbf{Stabilité.} Les pertes du discriminateur de CycleGAN restent stables autour de
         0,31 sur les 20 époques et la perte du générateur décroît régulièrement (6,98 à
-        environ 3,4). Pour AnimeGAN, la reprise avec un discriminateur réinitialisé se voit :
-        la perte du générateur remonte au début du second run (environ 3,3) puis redescend
-        lentement. La normalisation spectrale a empêché toute divergence malgré cette reprise.
+        environ 3,4). Pour AnimeGAN Hayao, la perte du générateur passe de 3,81 (époque 11, fin
+        du premier run) à 3,33 dès la reprise : le discriminateur réinitialisé est d'abord
+        plus facile à tromper. Elle se stabilise ensuite autour de 3,3. Aucune divergence n'a
+        été observée, ce qui est cohérent avec le rôle stabilisateur de la normalisation
+        spectrale (non testée sans elle, faute de budget GPU).
   \item \textbf{Budget.} Les entraînements sont courts (20 époques pour Hayao, 10 pour
         Shinkai contre 100 et plus dans l'article AnimeGAN) : les scores mesurent un modèle
         encore en progression, en particulier pour Hayao.
