@@ -121,14 +121,36 @@ Taille du fichier ONNX & 30,0 Mo & 3,8 Mo \\
 % ---------------------------------------------------------------------------
 \section{Protocole expérimental}
 \begin{itemize}
-  \item Matériel : GPU Kaggle 2 $	imes$ NVIDIA Tesla T4, durée d'entraînement \AMESURER.
-  \item Hyperparamètres : voir les paramètres journalisés dans MLflow (époques, lr, poids des
-        pertes) \AFAIRE{tableau des valeurs retenues}.
+  \item Matériel : GPU Kaggle 2 $\times$ NVIDIA Tesla T4 (un seul utilisé par les scripts).
+        Durée d'entraînement : environ 23 min par époque pour CycleGAN (7 h 40 pour 20
+        époques) et 25 min par époque pour AnimeGAN. Une session Kaggle étant limitée à 12 h,
+        l'entraînement AnimeGAN a été fait en deux runs : le second recharge le dernier
+        checkpoint du générateur (sauvegardé à chaque époque) ; le discriminateur, lui,
+        repart de zéro.
+  \item Hyperparamètres (aussi journalisés dans MLflow) : voir le tableau~\ref{tab:hparams}.
   \item Évaluation sur \texttt{test\_photo} uniquement : FID (Inception v3, 2048
         caractéristiques) contre les images du style, LPIPS (AlexNet) contre la photo d'entrée.
   \item Export ONNX (opset 17, hauteur et largeur dynamiques) et vérification de l'écart
         PyTorch / ONNX Runtime sur la même image.
 \end{itemize}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+ & CycleGAN (Hayao) & AnimeGAN \\
+\midrule
+Résolution & 128 & 256 \\
+Taille de lot & 4 & 8 \\
+Époques & 20 (lr décroissant après 10) & Hayao : 20 (dont 2 d'init.) ; Shinkai : 10 \\
+Taux d'apprentissage & $2\cdot10^{-4}$ & G : $2\cdot10^{-4}$, D : $4\cdot10^{-4}$ \\
+Adam $(\beta_1, \beta_2)$ & (0,5 ; 0,999) & (0,5 ; 0,999) \\
+Poids des pertes & cycle 10, identité 5 & adv. 1, contenu 1,5, Gram 3, couleur 10 \\
+\bottomrule
+\end{tabular}
+\caption{Hyperparamètres retenus. Shinkai part des poids Hayao, sans phase d'initialisation.}
+\label{tab:hparams}
+\end{table}
 
 % ---------------------------------------------------------------------------
 \section{Résultats : baseline contre modèle avancé}
@@ -177,8 +199,9 @@ Latence moyenne (ms) & \AMESURER & \AMESURER \\
 % ---------------------------------------------------------------------------
 \section{MLOps}
 \begin{itemize}
-  \item \textbf{DVC} : \texttt{data/raw} versionné (\texttt{data/raw.dvc}), remote
-        \AFAIRE{type de remote} ; pipeline \texttt{dvc.yaml} prepare $\rightarrow$ train
+  \item \textbf{DVC} : \texttt{data/raw} versionné (\texttt{data/raw.dvc}), sans remote
+        distant pour l'instant (cache DVC local ; un remote Google Drive ou S3 permettrait de
+        partager les données) ; pipeline \texttt{dvc.yaml} prepare $\rightarrow$ train
         $\rightarrow$ evaluate.
   \item \textbf{MLflow} : paramètres, pertes par époque, grilles d'images par époque,
         checkpoints ; Model Registry avec statut Staging puis Production
@@ -198,8 +221,10 @@ Latence moyenne (ms) & \AMESURER & \AMESURER \\
 % ---------------------------------------------------------------------------
 \section{Limites et perspectives}
 \begin{itemize}
-  \item Pas d'espace latent pour un générateur feed-forward : \AFAIRE{décision prise sur les
-        curseurs d'interpolation demandés par le sujet}.
+  \item Pas d'espace latent pour un générateur feed-forward : les curseurs d'interpolation
+        n'ont pas été implémentés. Deux pistes simples : mélanger pixel à pixel la photo et sa
+        version stylisée (intensité du style), ou interpoler les poids des générateurs Hayao
+        et Shinkai, qui partagent la même architecture puisque Shinkai est affiné depuis Hayao.
   \item Budget GPU limité (Kaggle) : nombre d'époques réduit, poids des pertes peu réglés.
   \item FID calculé sur un petit nombre d'images de test : estimation bruitée.
   \item Inférence sur CPU dans Docker ; quantification INT8 non explorée.
