@@ -7,7 +7,8 @@ en image de style anime, avec un style au choix (Hayao, Shinkai).
 
 - **Baseline** : CycleGAN (128×128, style Hayao)
 - **Modèle avancé** : AnimeGAN (256×256, un générateur par style), exporté en ONNX
-- **Métriques** : FID (proximité au style) et LPIPS (préservation du contenu)
+- **Métriques** : FID (proximité au style), LPIPS (préservation du contenu), Inception Score
+- **Curseurs d'interpolation** : mélange des poids Hayao ↔ Shinkai et intensité du style
 - **Stack** : PyTorch, MLflow, DVC, FastAPI + ONNX Runtime, React + Tailwind, Docker, GitHub Actions
 
 ## Démarrage en une commande
@@ -22,8 +23,10 @@ docker compose up --build
 | API      | http://localhost:8000/docs   |
 | MLflow   | http://localhost:5000        |
 
-Tant que `models/hayao.onnx` et `models/shinkai.onnx` n'existent pas, l'API utilise un
-**modèle factice** (filtre cartoon). L'interface indique « factice » ou « ONNX » pour chaque style.
+Les modèles entraînés sont versionnés par DVC : récupérez-les avec `dvc pull` (ou `dvc checkout`
+sur la machine qui les a produits) avant `docker compose up`. Sans `models/hayao.onnx` et
+`models/shinkai.onnx`, l'API utilise un **modèle factice** (filtre cartoon) ; l'interface
+indique « factice » ou « ONNX » pour chaque style.
 
 ## API
 
@@ -31,11 +34,15 @@ Tant que `models/hayao.onnx` et `models/shinkai.onnx` n'existent pas, l'API util
 |---------|----------------------|-------------------------------------------------------------|
 | GET     | `/health`            | État du serveur, présence du GPU, version du modèle         |
 | GET     | `/model/metadata`    | Nom, architecture, métriques (FID, LPIPS), styles           |
-| POST    | `/predict`           | `file` (image) + `style` -> JSON (image en base64, latence) |
-| POST    | `/predict/visualize` | `file` + `style` -> PNG avant / après                       |
+| POST    | `/predict`           | `file` + `style` (+ `mix`, `intensity`) -> JSON (image base64, latence) |
+| POST    | `/predict/visualize` | mêmes champs -> PNG avant / après                           |
+
+Curseurs : `mix` (0 = Hayao, 1 = Shinkai) interpole les **poids** des deux générateurs ONNX
+(même architecture, Shinkai est affiné depuis Hayao) ; `intensity` (0 à 2) dose le style :
+`photo + intensity × (anime − photo)`.
 
 Erreurs : `400` si le fichier n'est pas une image, `503` si le modèle n'est pas instancié,
-`422` si le style est inconnu.
+`422` si le style est inconnu ou si un curseur sort de ses bornes.
 
 ```bash
 curl -F "file=@photo.jpg" -F "style=shinkai" http://localhost:8000/predict/visualize -o resultat.png
@@ -69,7 +76,13 @@ dvc push
 python -m src.data.dataset --style Hayao             # lissage des contours
 python -m src.models.train --style Hayao --epochs 30
 python -m src.models.evaluate --style Hayao --checkpoint checkpoints/hayao/generator.pt
+python -m src.models.quantize --style hayao           # INT8 + comparaison au FP32
+python -m src.models.registry --name anime-animegan-hayao --version 1 --stage Production
 ```
+
+En pratique, l'entraînement a été fait sur GPU Kaggle avec `notebooks/kaggle_train.ipynb`
+(deux runs, la limite d'une session étant de 12 h ; le notebook sait reprendre un run coupé).
+Les poids, les ONNX et la base MLflow sont dans le `resultats.zip` produit par le notebook.
 
 `evaluate.py` écrit `models/hayao.onnx` et `models/metrics.json` : le backend les charge au
 démarrage. Pour envoyer les runs vers le serveur MLflow de docker-compose :
@@ -86,19 +99,27 @@ Le backend attend, pour chaque style, `models/<style>.onnx` avec une entrée `fl
 .github/workflows/   ci-tests.yml (lint + pytest + build front), docker-build.yml
 data/                versionné par DVC
 src/data/            dataset.py (dataset non apparié, lissage des contours)
-src/models/          architecture.py, train.py (MLflow), evaluate.py (FID, LPIPS, ONNX)
+src/models/          architecture.py, train.py, train_cyclegan.py, evaluate.py (FID, LPIPS, IS,
+                     ONNX), quantize.py (INT8), registry.py (Staging / Production)
+notebooks/           kaggle_train.ipynb (entraînement GPU, reprise après coupure)
+rapport/             rapport_technique.tex + figures/
 src/utils/           visualization.py (grilles avant/après ; tient lieu de gradcam.py)
 backend/             FastAPI : app/main.py, schemas.py, inference.py, tests/test_api.py
-frontend/            React + Tailwind : Dropzone, Webcam, StyleSelector, BeforeAfterSlider
+frontend/            React + Tailwind : Dropzone, Webcam, StyleSelector, StyleSliders,
+                     BeforeAfterSlider, LatencyBadge
 docker-compose.yml   backend + frontend + MLflow
 dvc.yaml             pipeline prepare -> train -> evaluate
 ```
 
-## Reste à faire
+## Résultats (photos de test, jamais vues à l'entraînement)
 
-- [ ] Membre A : baseline CycleGAN, fine-tuning depuis des poids pré-entraînés, style Shinkai,
-      enregistrement dans le MLflow Model Registry (Staging / Production)
-- [ ] Rapport LaTeX (`rapport_technique.pdf`)
+| Modèle             | Résolution | FID ↓ | LPIPS ↓ |
+|--------------------|-----------:|------:|--------:|
+| CycleGAN (Hayao)   | 128        | 144,1 | 0,128   |
+| AnimeGAN (Hayao)   | 256        | 180,1 | 0,041   |
+| AnimeGAN (Shinkai) | 256        | 136,8 | 0,029   |
+
+Détails, Inception Score, latences et analyse : `rapport/rapport_technique.tex`.
 
 ## Crédits des photos d'exemple
 

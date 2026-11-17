@@ -63,11 +63,14 @@ def to_uint8(batch: torch.Tensor) -> torch.Tensor:
 
 @torch.no_grad()
 def compute_metrics(generator, photo_dir: str, anime_dir: str, size: int, device) -> dict:
+    """FID (contre les images du style), LPIPS (contre la photo) et Inception Score."""
     from torchmetrics.image.fid import FrechetInceptionDistance
+    from torchmetrics.image.inception import InceptionScore
     from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 
     fid = FrechetInceptionDistance(feature=2048).to(device)
     lpips = LearnedPerceptualImagePatchSimilarity(net_type="alex").to(device)
+    inception = InceptionScore(splits=10).to(device)
     generator = generator.to(device).eval()
 
     for anime in DataLoader(PhotoDataset(anime_dir, size), batch_size=16):
@@ -76,8 +79,31 @@ def compute_metrics(generator, photo_dir: str, anime_dir: str, size: int, device
         photo = photo.to(device)
         fake = generator(photo).clamp(-1, 1)
         fid.update(to_uint8(fake), real=False)
+        inception.update(to_uint8(fake))
         lpips.update(fake, photo)
-    return {"fid": float(fid.compute()), "lpips": float(lpips.compute())}
+    is_mean, is_std = inception.compute()
+    return {
+        "fid": float(fid.compute()),
+        "lpips": float(lpips.compute()),
+        "inception_score": float(is_mean),
+        "inception_score_std": float(is_std),
+    }
+
+
+@torch.no_grad()
+def compute_inception_score(generator, photo_dir: str, size: int, device) -> dict:
+    """Inception Score seul : diversité et netteté des images générées (plus haut = mieux).
+
+    Utile pour compléter metrics.json sans recalculer FID et LPIPS.
+    """
+    from torchmetrics.image.inception import InceptionScore
+
+    inception = InceptionScore(splits=10).to(device)
+    generator = generator.to(device).eval()
+    for photo in DataLoader(PhotoDataset(photo_dir, size), batch_size=16):
+        inception.update(to_uint8(generator(photo.to(device))))
+    is_mean, is_std = inception.compute()
+    return {"inception_score": float(is_mean), "inception_score_std": float(is_std)}
 
 
 @torch.no_grad()
@@ -129,6 +155,11 @@ def main() -> None:
     parser.add_argument("--models-dir", default="models")
     parser.add_argument("--size", type=int, default=256)
     parser.add_argument("--skip-metrics", action="store_true", help="Export ONNX seulement")
+    parser.add_argument(
+        "--inception-only",
+        action="store_true",
+        help="Calcule seulement l'Inception Score et l'ajoute à metrics.json (pas d'export)",
+    )
     parser.add_argument("--register", action="store_true", help="Model Registry MLflow")
     parser.add_argument("--stage", default="Staging", choices=["Staging", "Production"])
     parser.add_argument("--experiment", default="anime-style-transfer")
@@ -141,6 +172,13 @@ def main() -> None:
     prefix = f"{args.arch}_{style}"
     raw = Path(args.raw_dir)
     models_dir = Path(args.models_dir)
+
+    is_deployed = args.arch == "animegan"
+    if args.inception_only:
+        values = compute_inception_score(generator, str(raw / "test_photo"), args.size, device)
+        update_metrics_file(models_dir / "metrics.json", prefix, values, is_deployed=False)
+        print(json.dumps(values, indent=2))
+        return
 
     values = {}
     if not args.skip_metrics:
@@ -155,7 +193,6 @@ def main() -> None:
         )
 
     # Le modèle avancé remplace le modèle factice du backend ; la baseline a un autre nom.
-    is_deployed = args.arch == "animegan"
     onnx_name = f"{style}.onnx" if is_deployed else f"cyclegan-{style}.onnx"
     onnx_path = models_dir / onnx_name
     export_onnx(generator, onnx_path, args.size)

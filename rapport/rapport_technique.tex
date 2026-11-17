@@ -129,7 +129,7 @@ Taille du fichier ONNX & 30,0 Mo & 3,8 Mo \\
         repart de zéro.
   \item Hyperparamètres (aussi journalisés dans MLflow) : voir le tableau~\ref{tab:hparams}.
   \item Évaluation sur \texttt{test\_photo} uniquement : FID (Inception v3, 2048
-        caractéristiques) contre les images du style, LPIPS (AlexNet) contre la photo d'entrée.
+        caractéristiques) contre les images du style, LPIPS (AlexNet) contre la photo d'entrée, Inception Score (10 sous-ensembles) sur les images générées.
   \item Export ONNX (opset 17, hauteur et largeur dynamiques) et vérification de l'écart
         PyTorch / ONNX Runtime sur la même image.
 \end{itemize}
@@ -159,38 +159,76 @@ Poids des pertes & cycle 10, identité 5 & adv. 1, contenu 1,5, Gram 3, couleur 
 \centering
 \begin{tabular}{lcccc}
 \toprule
-Modèle & Résolution & FID $\downarrow$ & LPIPS $\downarrow$ & Latence ONNX CPU (ms) \\
+Modèle & Résolution & FID $\downarrow$ & LPIPS $\downarrow$ & IS $\uparrow$ \\
 \midrule
-CycleGAN (Hayao) & 128 & 144,1 & 0,128 & 168,7 \\
-AnimeGAN (Hayao) & 256 & 180,1 & 0,041 & 244,4 \\
-AnimeGAN (Shinkai) & 256 & 136,8 & 0,029 & 244,3 \\
+CycleGAN (Hayao) & 128 & 144,1 & 0,128 & 5,40 $\pm$ 0,85 \\
+AnimeGAN (Hayao) & 256 & 180,1 & 0,041 & 7,21 $\pm$ 0,70 \\
+AnimeGAN (Shinkai) & 256 & 136,8 & 0,029 & 7,03 $\pm$ 0,78 \\
 \bottomrule
 \end{tabular}
-\caption{Comparaison sur les photos de test (source : \texttt{models/metrics.json}).}
+\caption{Comparaison sur les 791 photos de test (source : \texttt{models/metrics.json}).
+IS : Inception Score sur 10 sous-ensembles, moyenne $\pm$ écart-type.}
 \end{table}
+
+L'Inception Score mesure à la fois la netteté (Inception reconnaît un objet avec confiance)
+et la diversité des images générées. Il est plus élevé pour AnimeGAN, mais il faut le lire
+avec prudence ici : Inception a été entraîné sur des photos, et les sorties AnimeGAN restent
+très photographiques (voir la grille), donc faciles à classer. Le flou de CycleGAN en
+128$\times$128 fait au contraire baisser la confiance du classifieur. Le FID, qui compare
+directement aux images du style, reste la métrique principale pour juger le style.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{CPU Kaggle} & \multicolumn{2}{c}{PC de démonstration (4 c\oe{}urs)} \\
+ & PyTorch & ONNX Runtime & PyTorch & ONNX Runtime \\
+\midrule
+CycleGAN, 128 px (ms) & 108,0 & 168,7 & 426,1 & 291,8 \\
+AnimeGAN Hayao, 256 px (ms) & 150,2 & 244,4 & 688,5 & 499,0 \\
+AnimeGAN Shinkai, 256 px (ms) & 155,4 & 244,3 & 628,0 & 492,6 \\
+\midrule
+Écart maximal des sorties & \multicolumn{4}{c}{$2{,}3\cdot10^{-5}$ (AnimeGAN),
+  $2{,}3\cdot10^{-6}$ (CycleGAN)} \\
+\bottomrule
+\end{tabular}
+\caption{Latence moyenne d'une image, même protocole (\texttt{check\_onnx} de
+\texttt{evaluate.py}, 20 répétitions après un appel de chauffe).}
+\end{table}
+
+L'export ONNX est \textbf{fidèle} (écart maximal de l'ordre de $10^{-5}$ sur des sorties dans
+$[-1, 1]$). Son gain de vitesse \textbf{dépend du matériel} : sur le PC qui sert à la
+démonstration, ONNX Runtime est 1,3 à 1,5 fois plus rapide que PyTorch, alors qu'il était
+1,6 fois plus lent sur le CPU de la session Kaggle (processeur virtualisé partagé, PyTorch
+y profite de bibliothèques mieux optimisées pour ce CPU). L'export apporte en plus un
+backend sans dépendance à PyTorch, donc une image Docker plus légère.
+
+\subsection{Quantification INT8}
+\texttt{src/models/quantize.py} quantifie le générateur avec ONNX Runtime (quantification
+statique au format QDQ, poids int8, activations uint8), calibrée sur 64 photos
+d'\emph{entraînement}, puis le compare au modèle FP32 sur 32 photos de test.
 
 \begin{table}[h]
 \centering
 \begin{tabular}{lcc}
 \toprule
- & PyTorch CPU & ONNX Runtime CPU \\
+ & AnimeGAN Hayao & AnimeGAN Shinkai \\
 \midrule
-Latence moyenne, AnimeGAN Hayao (ms) & 150,2 & 244,4 \\
-Latence moyenne, AnimeGAN Shinkai (ms) & 155,4 & 244,3 \\
-Latence moyenne, CycleGAN (ms) & 108,0 & 168,7 \\
-Écart maximal des sorties (AnimeGAN) & \multicolumn{2}{c}{$2{,}3\cdot10^{-5}$} \\
-Écart maximal des sorties (CycleGAN) & \multicolumn{2}{c}{$1{,}2\cdot10^{-6}$} \\
+Taille FP32 $\rightarrow$ INT8 (Mo) & 3,86 $\rightarrow$ 1,32 & 3,86 $\rightarrow$ 1,32 \\
+Latence FP32 $\rightarrow$ INT8 (ms, 256 px) & 523 $\rightarrow$ 445 & 512 $\rightarrow$ 485 \\
+Écart moyen des sorties (niveaux sur 255) & 9,2 & 11,3 \\
+LPIPS entre sortie FP32 et sortie INT8 & 0,124 & 0,142 \\
 \bottomrule
 \end{tabular}
-\caption{PyTorch contre ONNX Runtime sur le CPU de la session Kaggle.}
+\caption{Quantification INT8 (PC de démonstration).}
 \end{table}
 
-L'export ONNX est \textbf{fidèle} (écart maximal de l'ordre de $10^{-5}$ sur des sorties dans
-$[-1, 1]$), mais il n'est \textbf{pas plus rapide} dans ces mesures : ONNX Runtime est environ
-1,6 fois plus lent que PyTorch sur le CPU de Kaggle. L'intérêt de l'export reste le
-déploiement (pas de dépendance à PyTorch dans l'image Docker du backend, image plus légère) ;
-le gain de vitesse attendu demanderait de régler ONNX Runtime (nombre de threads, niveau
-d'optimisation du graphe) ou de quantifier le modèle en INT8.
+Le modèle est 2,9 fois plus petit et 5 à 15~\% plus rapide, mais la dégradation est
+nette : l'écart LPIPS entre les sorties FP32 et INT8 (0,12 à 0,14) dépasse l'écart entre la
+photo et sa version stylisée (0,03 à 0,04). Les convolutions en profondeur du générateur,
+avec peu de canaux par filtre, supportent mal une seule échelle de quantification par tenseur.
+Nous gardons donc le modèle FP32 en production ; une quantification par canal ou un
+entraînement tenant compte de la quantification (QAT) seraient les pistes suivantes.
 
 \begin{figure}[h]
 \centering
@@ -204,6 +242,34 @@ marque la reprise après la coupure à 12 h (discriminateur réinitialisé).}
 \includegraphics[width=\linewidth]{figures/grille_resultats.png}
 \caption{Quatre photos de test (jamais vues à l'entraînement) et leurs versions stylisées.}
 \end{figure}
+
+% ---------------------------------------------------------------------------
+\section{Interpolation continue : curseurs interactifs}
+AnimeGAN est un générateur feed-forward : il ne prend pas de vecteur latent $z$ en entrée.
+L'interpolation se fait donc dans l'\textbf{espace des paramètres}. Comme le générateur
+Shinkai est affiné depuis les poids Hayao, les deux réseaux ont exactement la même
+architecture (101 tenseurs de poids de mêmes noms et formes). Pour un réglage
+$t \in [0, 1]$, le backend construit le générateur
+\[
+\theta(t) = (1 - t)\,\theta_{\text{Hayao}} + t\,\theta_{\text{Shinkai}},
+\]
+directement dans le graphe ONNX (\texttt{interpolate\_onnx} dans
+\texttt{backend/app/inference.py}), puis le met en cache par pas de 0,1 : au plus 11
+générateurs, de 3,9~Mo chacun. Le premier appel pour une nouvelle valeur coûte environ une
+seconde (construction de la session ONNX Runtime), les suivants ont la latence normale.
+
+Un second curseur dose le style dans l'espace image :
+$\text{sortie} = \text{photo} + \alpha\,(\text{anime} - \text{photo})$, avec
+$\alpha \in [0, 2]$ : 0 rend la photo, 1 la sortie du modèle, au-delà de 1 le style est
+accentué. Vu la faiblesse du style après un entraînement court, ce curseur rend la différence
+entre les modèles plus lisible pendant la démonstration.
+
+Côté API, les deux réglages sont des champs \texttt{mix} et \texttt{intensity} de
+\texttt{/predict} et \texttt{/predict/visualize}, bornés par FastAPI (réponse 422 hors
+bornes) ; côté interface, le composant React \texttt{StyleSliders} envoie la requête au
+relâchement du curseur. Des tests Pytest vérifient l'interpolation sur un petit modèle ONNX
+dont la sortie est connue : à mi-chemin entre un poids 0 et un poids 2, l'image ressort
+intacte.
 
 % ---------------------------------------------------------------------------
 \section{Analyse critique}
@@ -286,13 +352,13 @@ le run Hayao coupé par la limite de 12 h, marqué \texttt{KILLED}.}
 % ---------------------------------------------------------------------------
 \section{Limites et perspectives}
 \begin{itemize}
-  \item Pas d'espace latent pour un générateur feed-forward : les curseurs d'interpolation
-        n'ont pas été implémentés. Deux pistes simples : mélanger pixel à pixel la photo et sa
-        version stylisée (intensité du style), ou interpoler les poids des générateurs Hayao
-        et Shinkai, qui partagent la même architecture puisque Shinkai est affiné depuis Hayao.
+  \item Pas d'espace latent $z$ pour un générateur feed-forward : l'interpolation porte sur
+        les poids. Un générateur conditionnel (un seul réseau, style passé en entrée) donnerait
+        un vrai espace de styles continu.
   \item Budget GPU limité (Kaggle) : nombre d'époques réduit, poids des pertes peu réglés.
   \item FID calculé sur un petit nombre d'images de test : estimation bruitée.
-  \item Inférence sur CPU dans Docker ; quantification INT8 non explorée.
+  \item Inférence sur CPU dans Docker ; la quantification INT8 testée dégrade trop la sortie
+        pour être déployée (voir la section Résultats).
 \end{itemize}
 
 \end{document}
