@@ -264,6 +264,23 @@ marque la reprise après la coupure à 12 h (discriminateur réinitialisé).}
         images Docker et test de \texttt{/health}).
 \end{itemize}
 
+\begin{table}[h]
+\centering
+\begin{tabular}{llcc}
+\toprule
+Modèle enregistré & Fichier servi par l'API & Version & Statut \\
+\midrule
+\texttt{anime-animegan-hayao} & \texttt{models/hayao.onnx} & 1 & Production \\
+\texttt{anime-animegan-shinkai} & \texttt{models/shinkai.onnx} & 1 & Production \\
+\bottomrule
+\end{tabular}
+\caption{Model Registry MLflow (serveur \texttt{docker compose}, \url{http://localhost:5000}).
+Les deux modèles sont enregistrés en Staging par \texttt{evaluate.py --register}, puis passés
+en Production avec \texttt{src/models/registry.py}. L'expérience
+\texttt{anime-style-transfer} contient les 7 runs Kaggle (entraînements et évaluations), dont
+le run Hayao coupé par la limite de 12 h, marqué \texttt{KILLED}.}
+\end{table}
+
 \FIGURE{capture de l'interface MLflow (runs et Model Registry)}
 
 % ---------------------------------------------------------------------------

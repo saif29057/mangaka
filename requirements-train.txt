@@ -4,7 +4,7 @@ torchvision>=0.17
 numpy>=1.26
 pillow>=10.3
 opencv-python-headless>=4.9
-mlflow>=3.17,<4  # même version que le serveur de docker-compose.yml
+mlflow==3.18.0  # même version que le serveur de docker-compose.yml
 dvc>=3.50
 onnx>=1.16
 onnxruntime>=1.18
