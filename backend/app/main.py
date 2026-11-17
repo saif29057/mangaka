@@ -69,13 +69,27 @@ def load_metrics() -> dict[str, float | None]:
     return metrics
 
 
-async def run_inference(file: UploadFile, style: Style):
+MIX_FORM = Form(
+    None,
+    ge=0.0,
+    le=1.0,
+    description="Interpolation des poids Hayao -> Shinkai (0 à 1). Remplace style si fourni.",
+)
+INTENSITY_FORM = Form(
+    1.0,
+    ge=0.0,
+    le=2.0,
+    description="Dosage du style : 0 = photo, 1 = sortie du modèle, 2 = style accentué",
+)
+
+
+async def run_inference(file: UploadFile, style: Style, mix: float | None, intensity: float):
     if not engine.ready:
         raise HTTPException(status_code=503, detail="Modèle non instancié.")
     data = await file.read()
     try:
         image = decode_image(data)
-        output, latency_ms = await run_in_threadpool(engine.stylize, image, style)
+        output, latency_ms = await run_in_threadpool(engine.stylize, image, style, mix, intensity)
     except InvalidImageError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ModelNotReadyError as exc:
@@ -121,6 +135,7 @@ async def model_metadata() -> ModelMetadata:
         metrics=load_metrics(),
         classes=list(Style),
         styles=styles,
+        can_mix=engine.can_mix,
     )
 
 
@@ -133,14 +148,19 @@ async def model_metadata() -> ModelMetadata:
 async def predict(
     file: UploadFile = File(..., description="Photo à transformer"),
     style: Style = Form(Style.hayao, description="Style d'anime cible"),
+    mix: float | None = MIX_FORM,
+    intensity: float = INTENSITY_FORM,
 ) -> PredictionResponse:
     """Reçoit une image, applique le style et retourne le résultat en JSON."""
-    _, output, latency_ms = await run_inference(file, style)
+    _, output, latency_ms = await run_inference(file, style, mix, intensity)
+    applied_mix = round(mix * 10) / 10 if mix is not None and engine.can_mix else None
     return PredictionResponse(
         style=style,
         engine=engine.engine_for(style),
         width=output.width,
         height=output.height,
+        mix=applied_mix,
+        intensity=intensity,
         latency_ms=round(latency_ms, 2),
         image_base64=base64.b64encode(png_bytes(output)).decode("ascii"),
     )
@@ -158,9 +178,11 @@ async def predict(
 async def predict_visualize(
     file: UploadFile = File(..., description="Photo à transformer"),
     style: Style = Form(Style.hayao, description="Style d'anime cible"),
+    mix: float | None = MIX_FORM,
+    intensity: float = INTENSITY_FORM,
 ) -> Response:
     """Retourne une image PNG : l'original à gauche, la version anime à droite."""
-    image, output, latency_ms = await run_inference(file, style)
+    image, output, latency_ms = await run_inference(file, style, mix, intensity)
     return Response(
         content=png_bytes(side_by_side(image, output)),
         media_type="image/png",

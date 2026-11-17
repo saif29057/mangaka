@@ -5,6 +5,7 @@ import Dropzone from "./components/Dropzone.jsx";
 import ExampleGallery from "./components/ExampleGallery.jsx";
 import LatencyBadge from "./components/LatencyBadge.jsx";
 import StyleSelector from "./components/StyleSelector.jsx";
+import StyleSliders from "./components/StyleSliders.jsx";
 import Webcam from "./components/Webcam.jsx";
 import {
   API_DOWN_MESSAGE,
@@ -19,6 +20,13 @@ const FALLBACK_STYLES = [
   { name: "shinkai", label: "Shinkai", description: "Style Makoto Shinkai", engine: "dummy" },
 ];
 const HEALTH_POLL_MS = 5000;
+
+/** Réglages de l'interface -> paramètres de l'API (mix seulement si le curseur est actif). */
+const apiOptions = ({ style, mixEnabled, mix, intensity }) => ({
+  style,
+  mix: mixEnabled ? mix : null,
+  intensity,
+});
 const TABS = [
   ["upload", "Fichier"],
   ["examples", "Exemples"],
@@ -28,14 +36,24 @@ const TABS = [
 export default function App() {
   const [health, setHealth] = useState(null);
   const [styles, setStyles] = useState(FALLBACK_STYLES);
-  const [style, setStyle] = useState("hayao");
+  const [canMix, setCanMix] = useState(false);
+  // Réglages envoyés à l'API : style, mélange des poids Hayao -> Shinkai, intensité.
+  const [settings, setSettings] = useState({
+    style: "hayao",
+    mixEnabled: false,
+    mix: 0.5,
+    intensity: 1,
+  });
   const [tab, setTab] = useState("upload");
   const [source, setSource] = useState(null); // { blob, url }
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const styleRef = useRef(style);
+  // Copie synchrone des réglages : la webcam en continu lit toujours la dernière valeur.
+  const settingsRef = useRef(settings);
+  const sourceRef = useRef(source);
   const requestRef = useRef(0);
+  const { style } = settings;
 
   // Vérifie l'état de l'API au chargement puis toutes les 5 s : le bandeau passe au
   // rouge si le backend s'arrête, et les styles (ONNX / factice) sont rechargés au retour.
@@ -48,7 +66,11 @@ export default function App() {
           setHealth(body);
           // L'API est revenue : on efface l'ancien message « API ne répond pas ».
           setError((previous) => (previous === API_DOWN_MESSAGE ? "" : previous));
-          return getMetadata().then((metadata) => !cancelled && setStyles(metadata.styles));
+          return getMetadata().then((metadata) => {
+            if (cancelled) return;
+            setStyles(metadata.styles);
+            setCanMix(Boolean(metadata.can_mix));
+          });
         })
         .catch(() => !cancelled && setHealth({ status: "down" }));
     };
@@ -60,12 +82,12 @@ export default function App() {
     };
   }, []);
 
-  const run = useCallback(async (blob, styleName) => {
+  const run = useCallback(async (blob) => {
     const requestId = ++requestRef.current;
     setLoading(true);
     setError("");
     try {
-      const prediction = await predict(blob, styleName);
+      const prediction = await predict(blob, apiOptions(settingsRef.current));
       if (requestId === requestRef.current) setResult(prediction);
     } catch (err) {
       if (requestId === requestRef.current) {
@@ -79,24 +101,34 @@ export default function App() {
 
   const handleFile = useCallback(
     (blob) => {
+      const next = { blob, url: URL.createObjectURL(blob) };
       setSource((previous) => {
         if (previous) URL.revokeObjectURL(previous.url);
-        return { blob, url: URL.createObjectURL(blob) };
+        return next;
       });
-      return run(blob, styleRef.current);
+      sourceRef.current = next;
+      return run(blob);
     },
     [run],
   );
 
-  const handleStyle = (name) => {
-    styleRef.current = name;
-    setStyle(name);
-    if (source) run(source.blob, name);
+  /** Met à jour les réglages ; relance l'inférence si `rerun` (clic ou curseur relâché). */
+  const updateSettings = (patch, rerun = false) => {
+    const next = { ...settingsRef.current, ...patch };
+    settingsRef.current = next;
+    setSettings(next);
+    if (rerun && sourceRef.current) run(sourceRef.current.blob);
   };
+
+  const rerun = () => {
+    if (sourceRef.current) run(sourceRef.current.blob);
+  };
+
+  const handleStyle = (name) => updateSettings({ style: name, mixEnabled: false }, true);
 
   const downloadComparison = async () => {
     try {
-      const url = await predictVisualize(source.blob, style);
+      const url = await predictVisualize(source.blob, apiOptions(settings));
       const link = document.createElement("a");
       link.href = url;
       link.download = `anime-${style}.png`;
@@ -160,12 +192,30 @@ export default function App() {
 
           <div>
             <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink/50">2. Style</h2>
-            <StyleSelector styles={styles} value={style} onChange={handleStyle} />
+            <StyleSelector
+              styles={styles}
+              value={settings.mixEnabled ? null : style}
+              onChange={handleStyle}
+            />
+          </div>
+
+          <div>
+            <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink/50">
+              3. Réglages
+            </h2>
+            <StyleSliders
+              canMix={canMix}
+              mixEnabled={settings.mixEnabled}
+              mix={settings.mix}
+              intensity={settings.intensity}
+              onChange={updateSettings}
+              onCommit={rerun}
+            />
           </div>
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink/50">3. Résultat</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink/50">4. Résultat</h2>
           {/* Si l'API est coupée, le bandeau du haut l'indique déjà : pas de doublon. */}
           {error && !(error === API_DOWN_MESSAGE && !online) && (
             <p className="rounded-xl bg-red-100 p-3 text-sm text-red-700">{error}</p>

@@ -35,19 +35,25 @@ const getJson = async (path) => (await request(path)).json();
 export const getHealth = () => getJson("/health");
 export const getMetadata = () => getJson("/model/metadata");
 
-function imageForm(blob, style) {
+/**
+ * options : { style, mix, intensity }. mix (0 = Hayao, 1 = Shinkai) n'est envoyé que s'il
+ * est défini ; l'API mélange alors les poids des deux générateurs.
+ */
+function imageForm(blob, { style, mix = null, intensity = 1 }) {
   const form = new FormData();
   form.append("file", blob, "image.jpg");
   form.append("style", style);
+  if (mix !== null && mix !== undefined) form.append("mix", String(mix));
+  form.append("intensity", String(intensity));
   return form;
 }
 
-/** Envoie une image et un style ; retourne le résultat et la latence mesurée côté client. */
-export async function predict(blob, style, signal) {
+/** Envoie une image et les réglages ; retourne le résultat et la latence côté client. */
+export async function predict(blob, options, signal) {
   const start = performance.now();
   const response = await request("/predict", {
     method: "POST",
-    body: imageForm(blob, style),
+    body: imageForm(blob, options),
     signal,
   });
   const body = await response.json();
@@ -56,6 +62,8 @@ export async function predict(blob, style, signal) {
 
   return {
     style: body.style,
+    mix: body.mix,
+    intensity: body.intensity,
     engine: body.engine,
     width: body.width,
     height: body.height,
@@ -66,10 +74,10 @@ export async function predict(blob, style, signal) {
 }
 
 /** Planche avant/après générée par le serveur (PNG) : utile pour le téléchargement. */
-export async function predictVisualize(blob, style) {
+export async function predictVisualize(blob, options) {
   const response = await request("/predict/visualize", {
     method: "POST",
-    body: imageForm(blob, style),
+    body: imageForm(blob, options),
   });
   return URL.createObjectURL(await response.blob());
 }

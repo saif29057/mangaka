@@ -39,6 +39,10 @@ class ModelMetadata(StrictModel):
     metrics: dict[str, Optional[float]]
     classes: list[Style] = Field(description="Les styles jouent le rôle des classes")
     styles: list[StyleInfo]
+    can_mix: bool = Field(
+        default=False,
+        description="True si les deux générateurs ONNX sont chargés (curseur Hayao ↔ Shinkai)",
+    )
 
 
 class PredictionResponse(StrictModel):
@@ -46,6 +50,10 @@ class PredictionResponse(StrictModel):
     engine: str
     width: int
     height: int
+    mix: Optional[float] = Field(
+        default=None, description="Mélange des poids appliqué (0 = Hayao, 1 = Shinkai)"
+    )
+    intensity: float = Field(default=1.0, description="Dosage du style appliqué")
     latency_ms: float = Field(description="Temps d'inférence mesuré côté serveur")
     image_base64: str = Field(description="Image stylisée, PNG encodé en base64")
 

@@ -168,3 +168,61 @@ def test_corrupted_onnx_leaves_engine_not_ready(tmp_path):
     engine.load()
     assert engine.ready is False
     assert engine.sessions == {}
+
+
+def save_scale_model(path, factor: float) -> None:
+    """Petit modèle ONNX output = input * w, avec w stocké comme poids (initializer)."""
+    onnx = pytest.importorskip("onnx")
+    from onnx import TensorProto, helper, numpy_helper
+
+    shape = [1, 3, "h", "w"]
+    weight = numpy_helper.from_array(np.array([factor], dtype=np.float32), "w")
+    graph = helper.make_graph(
+        [helper.make_node("Mul", ["input", "w"], ["output"])],
+        "scale",
+        [helper.make_tensor_value_info("input", TensorProto.FLOAT, shape)],
+        [helper.make_tensor_value_info("output", TensorProto.FLOAT, shape)],
+        initializer=[weight],
+    )
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)])
+    model.ir_version = 9
+    onnx.save(model, path)
+
+
+def test_mix_interpolates_generator_weights(tmp_path):
+    """mix = 0.5 entre w = 0 (Hayao) et w = 2 (Shinkai) donne w = 1 : l'image ressort intacte."""
+    save_scale_model(tmp_path / "hayao.onnx", 0.0)
+    save_scale_model(tmp_path / "shinkai.onnx", 2.0)
+    engine = StyleTransferEngine(models_dir=tmp_path)
+    engine.load()
+    assert engine.can_mix
+
+    image = Image.new("RGB", (64, 64), (191, 64, 128))
+    half, _ = engine.stylize(image, Style.hayao, mix=0.5)
+    assert np.abs(np.asarray(half, dtype=int) - np.asarray(image, dtype=int)).max() <= 1
+    hayao, _ = engine.stylize(image, Style.shinkai, mix=0.0)
+    assert hayao.getpixel((0, 0)) == (128, 128, 128)  # w = 0 -> tenseur nul -> gris moyen
+    assert 5 in engine.mixed_sessions  # générateur interpolé gardé en cache
+
+
+def test_intensity_zero_returns_the_photo(tmp_path):
+    save_scale_model(tmp_path / "hayao.onnx", 0.0)
+    engine = StyleTransferEngine(models_dir=tmp_path)
+    engine.load()
+    image = Image.new("RGB", (64, 64), (200, 30, 90))
+    output, _ = engine.stylize(image, Style.hayao, intensity=0.0)
+    assert output.getpixel((10, 10)) == (200, 30, 90)
+
+
+@pytest.mark.parametrize("field,value", [("mix", "1.5"), ("intensity", "-0.1"), ("intensity", "3")])
+def test_slider_values_are_validated(client, field, value):
+    files = {"file": ("photo.jpg", make_image_bytes(), "image/jpeg")}
+    response = client.post("/predict", files=files, data={field: value})
+    assert response.status_code == 422
+
+
+def test_predict_accepts_sliders(client):
+    files = {"file": ("photo.jpg", make_image_bytes(), "image/jpeg")}
+    response = client.post("/predict", files=files, data={"mix": "0.5", "intensity": "1.5"})
+    assert response.status_code == 200
+    assert response.json()["intensity"] == 1.5
