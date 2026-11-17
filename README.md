@@ -135,7 +135,7 @@ Les 4 photos de `frontend/public/examples` viennent de Wikimedia Commons, sous l
 
 ## Équipe
 
-| Membre | Rôle                          |
-|--------|-------------------------------|
-| A      | Deep Learning et données      |
-| B      | Full-Stack et DevOps          |
+| Membre                  | Rôle                                                  |
+|-------------------------|-------------------------------------------------------|
+| Saif Sbaiti             | Deep Learning et données (entraînement Kaggle, métriques, ONNX) |
+| Mohamed Yosri Karchoud  | Full-Stack et DevOps (API FastAPI, React, Docker, CI) |
